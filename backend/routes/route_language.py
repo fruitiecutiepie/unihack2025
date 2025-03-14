@@ -1,4 +1,4 @@
-from flask import Blueprint
+from flask import Blueprint, request
 from services.service_model import download_and_load_model, models, current_language, AVAILABLE_MODELS
 
 language_routes = Blueprint("language_routes", __name__)
