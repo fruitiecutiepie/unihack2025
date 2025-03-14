@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Subtitle Stream</title>
+    <style>
+        body { text-align: center; background-color: black; color: white; font-family: Arial, sans-serif; }
+        #video { width: 80%; border-radius: 10px; }
+        #subtitle { font-size: 24px; font-weight: bold; margin-top: 10px; background: rgba(0, 0, 0, 0.7); padding: 10px; border-radius: 5px; display: inline-block; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.js"></script>
+    <script>
+        var socket = io.connect("http://" + document.domain + ":5000");
+        socket.on("subtitle", function(data) {
+            console.log(data);
+            document.getElementById("subtitle").innerText = data.text;
+            // set font to data.font
+            document.getElementById("subtitle").style.fontFamily = data.font;
+        });
+
+        function changeLanguage() {
+            var lang = document.getElementById("langSelect").value;
+            fetch("/set_language", {
+                method: "POST",
+                body: new URLSearchParams({ lang: lang }),
+                headers: { "Content-Type": "application/x-www-form-urlencoded" }
+            }).then(response => response.text()).then(alert);
+        }
+    </script>
+</head>
+<body>
+    <h1>Live Subtitle Stream</h1>
+    <select id="langSelect" onchange="changeLanguage()">
+        <option value="en">English</option>
+        <option value="es">Español (Spanish)</option>
+        <option value="fr">Français (French)</option>
+        <option value="cn">中文 (Chinese)</option>
+        <option value="ru">Русский (Russian)</option>
+        <option value="de">Deutsch (German)</option>
+        <option value="ja">日本語 (Japanese)</option>
+        <option value="ko">한국어 (Korean)</option>
+        <!-- <option value="it">Italiano (Italian)</option> -->
+    </select>
+    <img id="video" src="{{ url_for('video_feed') }}">
+    <div id="subtitle">Listening...</div>
+</body>
+</html>
