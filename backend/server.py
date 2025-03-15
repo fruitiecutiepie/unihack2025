@@ -123,7 +123,7 @@ rec.SetWords(True)
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 16000
-CHUNK = 1000
+CHUNK = 2000
 
 # Audio queue for processing
 audio_queue = queue.Queue()

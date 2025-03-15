@@ -1,15 +1,12 @@
 import queue
 import json
-import cv2
-import numpy as np
 import pyaudio
+from flask import request
 from flask_socketio import emit
 from vosk import KaldiRecognizer
-from services.service_model import models, current_language
-import os
-
-# Set environment variable to handle camera authorization
-os.environ['OPENCV_AVFOUNDATION_SKIP_AUTH'] = '1'
+from threading import Thread
+from time import sleep
+import services.service_model as service_model
 
 # Audio settings
 FORMAT = pyaudio.paInt16
@@ -22,47 +19,77 @@ audio_queue = queue.Queue()
 
 # Initialize PyAudio
 p = pyaudio.PyAudio()
-stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE,
-                input=True, frames_per_buffer=CHUNK, stream_callback=lambda in_data, frame_count, time_info, status: (audio_queue.put(in_data), pyaudio.paContinue)[1])
+def audio_callback(in_data, frame_count, time_info, status):
+    audio_queue.put(in_data)
+    return (None, pyaudio.paContinue)
+
+stream = p.open(
+    format=FORMAT,
+    channels=CHANNELS,
+    rate=RATE,
+    input=True,
+    frames_per_buffer=CHUNK,
+    stream_callback=audio_callback
+)
+
 stream.start_stream()
 
-# OpenCV Webcam
-cap = cv2.VideoCapture(0)
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-
 subtitle_text = "Listening..."
-rec = KaldiRecognizer(models[current_language], 16000)
+
+def get_recognizer():
+    service_model.download_and_load_model(service_model.current_language)
+    rec = KaldiRecognizer(service_model.models[service_model.current_language], 16000)
+    return rec
+
+rec = get_recognizer()
 rec.SetWords(True)
 
-def generate_frames():
-    global subtitle_text, rec, current_language
+def update_recognizer():
+    global rec
+    rec = get_recognizer()
+    rec.SetWords(True)
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+def process_audio(socketio):
+    global subtitle_text, rec
+    
+    if not audio_queue.empty():
+        data = audio_queue.get()
+        if rec.AcceptWaveform(data):
+            result = json.loads(rec.Result())
+            subtitle_text = result["text"]
+            return subtitle_text
+    
+    return None
 
-        if not audio_queue.empty():
-            data = audio_queue.get()
-            if rec.AcceptWaveform(data):
-                result = json.loads(rec.Result())
-                subtitle_text = result["text"]
+def transcription_thread(socketio, sid):
+    while True:
+        result = process_audio(socketio=socketio)
+        if result:
+            print(result)
+            socketio.emit("subtitle", {"text": result, "lang": service_model.current_language}, room=sid)
+        sleep(0.1)
 
-        # Overlay subtitles on frame
-        overlay = frame.copy()
-        frame_height, frame_width, _ = frame.shape
-        cv2.rectangle(overlay, (50, frame_height - 100), (frame_width - 50, frame_height - 50), (0, 0, 0), -1)
-        alpha = 0.5
-        cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0, frame)
 
-        cv2.putText(frame, subtitle_text, (60, frame_height - 65), cv2.FONT_HERSHEY_SIMPLEX,
-                    1, (255, 255, 255), 2, cv2.LINE_AA)
+def audio_service(socketio):
+    @socketio.on('connect')
+    def handle_connect():
+        emit('status', {'data': 'Connected'})
+        # Start transcription in a separate thread
+        socketio.start_background_task(transcription_thread, socketio, request.sid)
+        print("Transcription thread started")
+        
+    @socketio.on('language_changed')
+    def handle_language_changed(data):
+        global rec
+        lang = data.get('lang', '').lower()
+        if lang in service_model.AVAILABLE_MODELS:
+            service_model.current_language = lang
+            rec = get_recognizer()
+            rec.SetWords(True)
+            emit('language_updated', {'lang': service_model.current_language})
+        else:
+            emit('error', {'message': 'Language not available'})
 
-        # Convert frame to JPEG
-        _, buffer = cv2.imencode(".jpg", frame)
-        frame_bytes = buffer.tobytes()
-
-        emit("subtitle", {"text": subtitle_text, "lang": current_language})
-
-        yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n")
+    @socketio.on('disconnect')
+    def handle_disconnect():
+        print('Client disconnected')

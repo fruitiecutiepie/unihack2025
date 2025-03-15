@@ -1,6 +1,5 @@
 import os
 
-VOSK_BASE_URL = "https://alphacephei.com/vosk/models/"
 MODEL_BASE_URL = os.path.abspath(os.path.join(os.path.dirname(__file__), "models"))
 
 AVAILABLE_MODELS = {
