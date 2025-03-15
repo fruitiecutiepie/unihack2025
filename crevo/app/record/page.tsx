@@ -1,349 +1,184 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Video, StopCircle, Save, Trash2 } from "lucide-react"
-//import { toast } from "@/hooks/use-toast"
+import {
+  ArrowLeft,
+  Video,
+  StopCircle,
+  Save,
+  Trash2,
+  Subtitles,
+  CaptionsIcon as SubtitlesOff,
+  Mic,
+  MicOff,
+} from "lucide-react"
+import { toast } from "@/hooks/use-toast"
+import LanguageSelector from "@/components/language-selector"
+import { Label } from "@/components/ui/label"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { CustomSwitch } from "@/components/ui/custom-switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+
+type CaptionLanguageOption = "original" | "translated" | "both"
 
 export default function RecordVideo() {
   const [recording, setRecording] = useState(false)
   const [videoBlob, setVideoBlob] = useState<Blob | null>(null)
   const [permission, setPermission] = useState<boolean | null>(null)
+  const [captions, setCaptions] = useState<string>("")
+  const [translatedCaptions, setTranslatedCaptions] = useState<string>("")
+  const [captionIndex, setCaptionIndex] = useState(0)
+  const [captionsEnabled, setCaptionsEnabled] = useState(true)
+  const [captionLanguage, setCaptionLanguage] = useState<CaptionLanguageOption>("original")
+  const [micActive, setMicActive] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const [recordedVideo, setRecordedVideo] = useState<string | null>(null);
-  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
-  const chunks = useRef<Blob[]>([]);
+  const chunksRef = useRef<BlobPart[]>([])
+  const captionIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
 
-  // Add refs to track previous mouth positions and speaking status
-  const prevMouthPositions = useRef<Map<number, any[]>>(new Map());
-  const speakingFaces = useRef<Map<number, boolean>>(new Map());
-  const frameCounter = useRef<number>(0);
-  // Add debounce counters for each face
-  const speakingCounters = useRef<Map<number, number>>(new Map());
-  const notSpeakingCounters = useRef<Map<number, number>>(new Map());
-  // Threshold for mouth movement to be considered speaking
-  const MOUTH_MOVEMENT_THRESHOLD = 0.015;
-  // Debounce thresholds for speaking detection
-  const SPEAKING_THRESHOLD = 3;
-  const NOT_SPEAKING_THRESHOLD = 5;
+  // Sample captions that will rotate during recording
+  const sampleCaptions = [
+    "This is an AI-powered video editor",
+    "It can automatically edit your videos",
+    "Just record or upload your content",
+    "The AI will handle the rest",
+    "You can add effects and transitions",
+    "Perfect for social media content",
+    "Save time on video editing",
+    "Create professional videos easily",
+  ]
 
-  // onResults callback to detect mouth movement and draw detected mouth landmarks
-  const onResults = useCallback((results: any) => {
-    if (!canvasRef.current || !videoRef.current) return;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
-  
-    // Clear the canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Increment frame counter
-    frameCounter.current += 1;
-  
-    // Default settings
-    let zoom = 1;
-    let faceCenterX = 0;
-    let faceCenterY = 0;
-    let activeSpeaker = -1;
-  
-    // Check if faces are detected
-    if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-      // Process each detected face
-      results.multiFaceLandmarks.forEach((landmarks: any, faceIndex: number) => {
-        // Get previous landmarks for this face
-        const previousLandmarks = prevMouthPositions.current.get(faceIndex) || [];
-        
-        // Calculate mouth movement
-        let mouthMovement = 0;
-        
-        if (previousLandmarks.length > 0) {
-          // Focus specifically on mouth opening/closing landmarks
-          // Upper lip: 13, 14, 312
-          // Lower lip: 17, 15, 16
-          // Corners: 61, 291
-          const upperLipIndices = [13, 14, 312];
-          const lowerLipIndices = [17, 15, 16];
-          const cornerIndices = [61, 291];
-          
-          // Calculate vertical distance between upper and lower lip
-          let upperLipY = 0;
-          let lowerLipY = 0;
-          
-          upperLipIndices.forEach(index => {
-            if (landmarks[index]) {
-              upperLipY += landmarks[index].y;
-            }
-          });
-          upperLipY /= upperLipIndices.length;
-          
-          lowerLipIndices.forEach(index => {
-            if (landmarks[index]) {
-              lowerLipY += landmarks[index].y;
-            }
-          });
-          lowerLipY /= lowerLipIndices.length;
-          
-          // Current vertical mouth opening
-          const currentMouthOpening = Math.abs(lowerLipY - upperLipY);
-          
-          // Previous vertical mouth opening
-          let prevUpperLipY = 0;
-          let prevLowerLipY = 0;
-          
-          upperLipIndices.forEach(index => {
-            if (previousLandmarks[index]) {
-              prevUpperLipY += previousLandmarks[index].y;
-            }
-          });
-          prevUpperLipY /= upperLipIndices.length;
-          
-          lowerLipIndices.forEach(index => {
-            if (previousLandmarks[index]) {
-              prevLowerLipY += previousLandmarks[index].y;
-            }
-          });
-          prevLowerLipY /= lowerLipIndices.length;
-          
-          const previousMouthOpening = Math.abs(prevLowerLipY - prevUpperLipY);
-          
-          // Calculate change in mouth opening
-          const verticalMovement = Math.abs(currentMouthOpening - previousMouthOpening);
-          
-          // Also check horizontal movement of mouth corners
-          let horizontalMovement = 0;
-          cornerIndices.forEach(index => {
-            const current = landmarks[index];
-            const previous = previousLandmarks[index];
-            
-            if (current && previous) {
-              // Focus more on horizontal movement (x) for mouth corners
-              const dx = current.x - previous.x;
-              horizontalMovement += Math.abs(dx);
-            }
-          });
-          
-          // Weight vertical movement more heavily as it's more indicative of speaking
-          mouthMovement = (verticalMovement * 3) + (horizontalMovement * 1);
-        }
-        
-        // Store current landmarks for next frame comparison
-        prevMouthPositions.current.set(faceIndex, [...landmarks]);
-        
-        // Initialize counters if they don't exist
-        if (!speakingCounters.current.has(faceIndex)) {
-          speakingCounters.current.set(faceIndex, 0);
-        }
-        if (!notSpeakingCounters.current.has(faceIndex)) {
-          notSpeakingCounters.current.set(faceIndex, 0);
-        }
-        
-        // Get current speaking status
-        let isSpeaking = speakingFaces.current.get(faceIndex) || false;
-        
-        // Update speaking status based on mouth movement with debounce
-        if (mouthMovement > MOUTH_MOVEMENT_THRESHOLD) {
-          // Increment speaking counter and reset not speaking counter
-          speakingCounters.current.set(faceIndex, speakingCounters.current.get(faceIndex)! + 1);
-          notSpeakingCounters.current.set(faceIndex, 0);
-          
-          // If speaking counter reaches threshold, mark as speaking
-          if (speakingCounters.current.get(faceIndex)! >= SPEAKING_THRESHOLD) {
-            isSpeaking = true;
-          }
-        } else {
-          // Increment not speaking counter and reset speaking counter
-          notSpeakingCounters.current.set(faceIndex, notSpeakingCounters.current.get(faceIndex)! + 1);
-          speakingCounters.current.set(faceIndex, 0);
-          
-          // If not speaking counter reaches threshold, mark as not speaking
-          if (notSpeakingCounters.current.get(faceIndex)! >= NOT_SPEAKING_THRESHOLD) {
-            isSpeaking = false;
-          }
-        }
-        
-        // Update speaking status
-        speakingFaces.current.set(faceIndex, isSpeaking);
-        
-        // If this face is speaking, make it the active speaker for zoom
-        if (isSpeaking && activeSpeaker === -1) {
-          activeSpeaker = faceIndex;
-          
-          // Compute the bounding box of the face
-          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-          landmarks.forEach((landmark: any) => {
-            minX = Math.min(minX, landmark.x);
-            minY = Math.min(minY, landmark.y);
-            maxX = Math.max(maxX, landmark.x);
-            maxY = Math.max(maxY, landmark.y);
-          });
-          
-          // Set the zoom factor when speaking
-          zoom = 1.5; // Adjust as necessary
-          
-          // Compute face center in canvas coordinates
-          faceCenterX = ((minX + maxX) / 2) * canvas.width;
-          faceCenterY = ((minY + maxY) / 2) * canvas.height;
-        }
-      });
-    }
-  
-    // Save the current context state
-    ctx.save();
-  
-    if (activeSpeaker !== -1 && zoom !== 1) {
-      // Apply zoom effect centered on the speaking face
-      
-      // Calculate the scaled dimensions
-      const scaledWidth = canvas.width / zoom;
-      const scaledHeight = canvas.height / zoom;
-      
-      // Calculate the top-left corner of the zoomed viewport
-      const sourceX = Math.max(0, faceCenterX - (scaledWidth / 2));
-      const sourceY = Math.max(0, faceCenterY - (scaledHeight / 2));
-      
-      // Ensure we don't go out of bounds
-      const adjustedSourceX = Math.min(sourceX, canvas.width - scaledWidth);
-      const adjustedSourceY = Math.min(sourceY, canvas.height - scaledHeight);
-      
-      // Draw the zoomed portion of the video
-      ctx.drawImage(
-        videoRef.current,
-        adjustedSourceX, adjustedSourceY, scaledWidth, scaledHeight,
-        0, 0, canvas.width, canvas.height
-      );
-    } else {
-      // Draw the normal video frame
-      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-    }
-  
-    // Restore context to remove the zoom transformation for overlays
-    ctx.restore();
-  
-    // Draw mouth landmarks and speaking indicators
-    if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-      results.multiFaceLandmarks.forEach((landmarks: any, faceIndex: number) => {
-        const mouthIndices = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291];
-        ctx.beginPath();
-        mouthIndices.forEach((index, i) => {
-          const landmark = landmarks[index];
-          const x = landmark.x * canvas.width;
-          const y = landmark.y * canvas.height;
-          if (i === 0) {
-            ctx.moveTo(x, y);
-          } else {
-            ctx.lineTo(x, y);
-          }
-        });
-        ctx.closePath();
-        const isFaceSpeaking = speakingFaces.current.get(faceIndex) || false;
-        ctx.strokeStyle = isFaceSpeaking ? "red" : "lime";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        if (isFaceSpeaking) {
-          const mouthTop = landmarks[61];
-          const labelX = mouthTop.x * canvas.width;
-          const labelY = (mouthTop.y * canvas.height) - 10;
-          ctx.font = "16px Arial";
-          ctx.fillStyle = "red";
-          ctx.fillText("Speaking", labelX - 30, labelY);
-        }
-      });
-    }
-  }, []);
+  // Sample translated captions
+  const sampleTranslatedCaptions = [
+    "Este es un editor de video con IA",
+    "Puede editar automáticamente tus videos",
+    "Solo graba o sube tu contenido",
+    "La IA se encargará del resto",
+    "Puedes añadir efectos y transiciones",
+    "Perfecto para contenido de redes sociales",
+    "Ahorra tiempo en la edición de videos",
+    "Crea videos profesionales fácilmente",
+  ]
 
   useEffect(() => {
-    if (!videoRef.current || !canvasRef.current) return;
-
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    async function setupCameraAndMediapipe() {
+    async function setupCamera() {
       try {
-        // Get the camera stream
         const stream = await navigator.mediaDevices.getUserMedia({
           video: true,
           audio: true,
-        });
+        })
+
         if (videoRef.current) {
-          videoRef.current.srcObject = stream;
+          videoRef.current.srcObject = stream
         }
+        streamRef.current = stream
 
-        // Dynamically import Mediapipe modules
-        const { FaceMesh } = await import("@mediapipe/face_mesh");
-        const { Camera } = await import("@mediapipe/camera_utils");
+        // Check if audio tracks exist and are enabled
+        const audioTracks = stream.getAudioTracks()
+        setMicActive(audioTracks.length > 0 && audioTracks[0].enabled)
 
-        // Initialize FaceMesh with a locateFile function for WASM assets
-        const faceMesh = new FaceMesh({
-          locateFile: (file: string) =>
-            `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
-        });
-        faceMesh.setOptions({
-          // TODO: diff model to dynamically change/detect faces
-          maxNumFaces: 5,
-          refineLandmarks: true,
-          minDetectionConfidence: 0.5,
-          minTrackingConfidence: 0.5,
-        });
-        faceMesh.onResults(onResults);
-
-        // Use Mediapipe Camera utility to process each frame
-        if (videoRef.current) {
-          const mpCamera = new Camera(videoRef.current, {
-            onFrame: async () => {
-              await faceMesh.send({ image: videoRef.current! });
-            },
-            width: 640,
-            height: 480,
-          });
-          mpCamera.start();
-        }
+        setPermission(true)
       } catch (err) {
-        console.error("Error setting up camera or Mediapipe:", err);
+        console.error("Error accessing camera:", err)
+        setPermission(false)
+        setMicActive(false)
+        toast({
+          title: "Camera access denied",
+          description: "Please allow camera access to record video",
+          variant: "destructive",
+        })
       }
     }
-    setupCameraAndMediapipe();
 
-    // Cleanup: Stop all tracks when component unmounts
+    setupCamera()
+
     return () => {
-      const stream = videoRef.current?.srcObject as MediaStream;
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
+      // Clean up the stream when component unmounts
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop())
       }
-    };
-  }, [onResults]);
 
-  // Recording functionality remains the same
-  const startRecording = () => {
-    chunks.current = [];
-    const stream = videoRef.current?.srcObject as MediaStream;
-    if (stream) {
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunks.current.push(e.data);
-        }
-      };
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks.current, { type: "video/webm" });
-        const videoURL = URL.createObjectURL(blob);
-        setRecordedVideo(videoURL);
-        setRecordedBlob(blob);
-      };
-      mediaRecorder.start();
-      setRecording(true);
+      // Clear any running caption intervals
+      if (captionIntervalRef.current) {
+        clearInterval(captionIntervalRef.current)
+      }
     }
-  };
+  }, [])
+
+  // Simulate captions during recording
+  useEffect(() => {
+    if (recording) {
+      // Set initial caption
+      setCaptions(sampleCaptions[0])
+      setTranslatedCaptions(sampleTranslatedCaptions[0])
+
+      // Rotate through captions every few seconds
+      captionIntervalRef.current = setInterval(() => {
+        setCaptionIndex((prev) => {
+          const newIndex = (prev + 1) % sampleCaptions.length
+          setCaptions(sampleCaptions[newIndex])
+          setTranslatedCaptions(sampleTranslatedCaptions[newIndex])
+          return newIndex
+        })
+      }, 3000)
+    } else {
+      // Clear captions when not recording
+      setCaptions("")
+      setTranslatedCaptions("")
+
+      // Clear interval
+      if (captionIntervalRef.current) {
+        clearInterval(captionIntervalRef.current)
+        captionIntervalRef.current = null
+      }
+    }
+
+    return () => {
+      if (captionIntervalRef.current) {
+        clearInterval(captionIntervalRef.current)
+      }
+    }
+  }, [recording])
+
+  const startRecording = () => {
+    if (!videoRef.current || !videoRef.current.srcObject) return
+
+    chunksRef.current = []
+    const stream = videoRef.current.srcObject as MediaStream
+
+    // Check microphone status before recording
+    const audioTracks = stream.getAudioTracks()
+    setMicActive(audioTracks.length > 0 && audioTracks[0].enabled)
+
+    const mediaRecorder = new MediaRecorder(stream)
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) {
+        chunksRef.current.push(e.data)
+      }
+    }
+
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(chunksRef.current, { type: "video/mp4" })
+      setVideoBlob(blob)
+      toast({
+        title: "Recording complete",
+        description: "Your video has been recorded successfully",
+      })
+    }
+
+    mediaRecorder.start()
+    mediaRecorderRef.current = mediaRecorder
+    setRecording(true)
+    toast({
+      title: "Recording started",
+      description: "Recording video from your camera",
+    })
+  }
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && recording) {
@@ -361,22 +196,85 @@ export default function RecordVideo() {
     a.download = `recorded-video-${new Date().toISOString()}.mp4`
     a.click()
 
-    /*
     toast({
       title: "Video saved",
       description: "Your recorded video has been saved to your device",
     })
-    */
   }
 
   const discardVideo = () => {
     setVideoBlob(null)
-    /*
     toast({
       title: "Video discarded",
       description: "Your recorded video has been discarded",
     })
-    */
+  }
+
+  const toggleCaptions = () => {
+    setCaptionsEnabled((prev) => !prev)
+    toast({
+      title: captionsEnabled ? "Captions disabled" : "Captions enabled",
+      description: captionsEnabled
+        ? "Captions will not be shown or recorded"
+        : "Captions will be shown during recording",
+    })
+  }
+
+  const handleCaptionLanguageChange = (value: string) => {
+    setCaptionLanguage(value as CaptionLanguageOption)
+
+    const messages = {
+      original: "Showing original language captions",
+      translated: "Showing translated captions",
+      both: "Showing both original and translated captions",
+    }
+
+    toast({
+      title: "Caption language updated",
+      description: messages[value as CaptionLanguageOption],
+    })
+  }
+
+  // Function to render the appropriate captions based on the selected option
+  const renderCaptions = () => {
+    if (!captionsEnabled) return null
+
+    let captionContent
+
+    switch (captionLanguage) {
+      case "original":
+        captionContent = (
+          <p className="text-white text-center font-medium text-lg">
+            {recording ? captions : "This is how captions will appear during recording"}
+          </p>
+        )
+        break
+      case "translated":
+        captionContent = (
+          <p className="text-white text-center font-medium text-lg">
+            {recording ? translatedCaptions : "Captions will be translated to your selected language"}
+          </p>
+        )
+        break
+      case "both":
+        captionContent = (
+          <>
+            <p className="text-white text-center font-medium text-lg mb-1">
+              {recording ? captions : "This is how captions will appear during recording"}
+            </p>
+            <p className="text-blue-300 text-center font-medium text-lg">
+              {recording ? translatedCaptions : "With translation below in your selected language"}
+            </p>
+          </>
+        )
+        break
+    }
+
+    return (
+      <div className="absolute bottom-8 left-0 right-0 flex justify-center">
+        <div className="bg-black/70 px-6 py-3 rounded-lg backdrop-blur-sm max-w-[80%]">{captionContent}</div>
+      </div>
+    )
   }
 
   return (
@@ -405,7 +303,70 @@ export default function RecordVideo() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-3xl mx-auto">
-          <h1 className="text-2xl font-light text-white mb-8 text-center">Record Video</h1>
+          {/* Controls Bar */}
+          <div className="flex flex-wrap items-center justify-between mb-4 gap-4">
+            {/* Microphone Status Indicator */}
+            <div className="flex items-center space-x-2">
+              {micActive ? (
+                <>
+                  <Mic className="h-4 w-4 text-green-400" aria-hidden="true" />
+                  <span className="text-sm text-zinc-300">Microphone active</span>
+                </>
+              ) : (
+                <>
+                  <MicOff className="h-4 w-4 text-red-400" aria-hidden="true" />
+                  <span className="text-sm text-zinc-400">Microphone inactive</span>
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center space-x-6">
+              {/* Caption Language Selector */}
+              {captionsEnabled && (
+                <div className="flex items-center space-x-2">
+                  <Select value={captionLanguage} onValueChange={handleCaptionLanguageChange}>
+                    <SelectTrigger className="w-[180px] h-8 bg-zinc-800 border-zinc-700 text-white">
+                      <SelectValue placeholder="Caption language" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="original">Original Language</SelectItem>
+                      <SelectItem value="translated">Translated</SelectItem>
+                      <SelectItem value="both">Both Languages</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Caption Toggle */}
+              <div className="flex items-center space-x-3">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center space-x-2">
+                        <Label htmlFor="captions-toggle" className="text-sm text-zinc-400 cursor-pointer">
+                          Captions
+                        </Label>
+                        <CustomSwitch
+                          id="captions-toggle"
+                          checked={captionsEnabled}
+                          onCheckedChange={toggleCaptions}
+                          aria-label={captionsEnabled ? "Disable captions" : "Enable captions"}
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="left">
+                      <p>{captionsEnabled ? "Turn off captions" : "Turn on captions"}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                {captionsEnabled ? (
+                  <Subtitles className="h-4 w-4 text-white" aria-hidden="true" />
+                ) : (
+                  <SubtitlesOff className="h-4 w-4 text-zinc-500" aria-hidden="true" />
+                )}
+              </div>
+            </div>
+          </div>
 
           {/* Video Preview */}
           <div className="relative aspect-video bg-zinc-800 rounded-lg overflow-hidden mb-6 shadow-xl">
@@ -419,35 +380,31 @@ export default function RecordVideo() {
               </div>
             )}
 
-            
             {videoBlob ? (
-              <div>
-              <video className="w-full h-full" src={URL.createObjectURL(videoBlob)} controls />
-              <canvas ref={canvasRef} className="absolute w-full h-full object-cover" />
-              </div>
+              <video className="w-full h-full object-cover" src={URL.createObjectURL(videoBlob)} controls />
             ) : (
-              <div>
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover"
-              />
-              <canvas
-                ref={canvasRef}
-                className="absolute top-0 left-0 w-full h-full"
-              />
-            </div>
+              <video ref={videoRef} className="w-full h-full object-cover" autoPlay playsInline muted />
             )}
 
-            
-            {recording && (
-              <div className="absolute top-4 left-4 flex items-center">
-                <div className="w-3 h-3 rounded-full bg-red-500 mr-2 animate-pulse"></div>
-                <span className="text-white text-sm">Recording</span>
-              </div>
-            )}
+            {/* Status Indicators */}
+            <div className="absolute top-4 left-4 flex items-center space-x-4">
+              {recording && (
+                <div className="flex items-center">
+                  <div className="w-3 h-3 rounded-full bg-red-500 mr-2 animate-pulse"></div>
+                  <span className="text-white text-sm">Recording</span>
+                </div>
+              )}
+
+              {!micActive && recording && (
+                <div className="flex items-center bg-black/50 px-2 py-1 rounded-md">
+                  <MicOff className="w-3 h-3 text-red-400 mr-1" />
+                  <span className="text-white text-xs">Muted</span>
+                </div>
+              )}
+            </div>
+
+            {/* Captions */}
+            {renderCaptions()}
           </div>
 
           {/* Controls */}
@@ -493,6 +450,11 @@ export default function RecordVideo() {
                 )}
               </Button>
             )}
+          </div>
+
+          {/* Language Selector */}
+          <div className="mt-10">
+            <LanguageSelector />
           </div>
         </div>
       </main>

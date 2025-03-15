@@ -6,7 +6,7 @@ import { useState, useRef } from "react"
 import { Upload, X, FileVideo } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-//import { toast } from "@/hooks/use-toast"
+import { toast } from "@/hooks/use-toast"
 
 export default function VideoUploader() {
   const [videos, setVideos] = useState<File[]>([])
@@ -19,13 +19,11 @@ export default function VideoUploader() {
       const newFiles = Array.from(e.target.files).filter((file) => file.type.startsWith("video/"))
 
       if (newFiles.length === 0) {
-        /*
         toast({
           title: "Invalid files",
           description: "Please select video files only.",
           variant: "destructive",
         })
-        */
         return
       }
 
@@ -46,12 +44,10 @@ export default function VideoUploader() {
         if (prev >= 100) {
           clearInterval(interval)
           setUploading(false)
-          /*
           toast({
             title: "Upload complete",
             description: `${videos.length} videos uploaded successfully.`,
           })
-          */
           return 100
         }
         return prev + 5

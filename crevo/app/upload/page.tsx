@@ -7,7 +7,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Plus, Film, Trash2, Download, ArrowLeftIcon } from "lucide-react"
-//import { toast } from "@/hooks/use-toast"
+import { toast } from "@/hooks/use-toast"
 import { motion, AnimatePresence } from "framer-motion"
 
 type PageState = "upload" | "loading" | "preview"
@@ -87,34 +87,28 @@ export default function UploadFiles() {
       const newFiles = Array.from(selectedFiles).filter((file) => file.type.startsWith("video/"))
 
       if (newFiles.length === 0) {
-        /*
         toast({
           title: "Invalid files",
           description: "Please select video files only",
           variant: "destructive",
         })
-        */
         return
       }
 
       setFiles((prev) => [...prev, ...newFiles])
-      /*
       toast({
         title: "Files added",
         description: `Added ${newFiles.length} video file(s)`,
       })
-      */
     }
   }
 
   const removeFile = (index: number) => {
     setFiles((prev) => prev.filter((_, i) => i !== index))
-    /*
     toast({
       title: "File removed",
       description: "The file has been removed",
     })
-    */
   }
 
   const handleGenerate = async () => {
