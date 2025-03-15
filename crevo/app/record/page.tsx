@@ -343,6 +343,23 @@ export default function RecordVideo() {
       mediaRecorder.start();
       setRecording(true);
     }
+
+    const mediaRecorder = new MediaRecorder(stream)
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) {
+        chunks.current.push(e.data)
+      }
+    }
+
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(chunks.current, { type: "video/mp4" })
+      setVideoBlob(blob)
+    }
+
+    mediaRecorder.start()
+    mediaRecorderRef.current = mediaRecorder
+    setRecording(true)
   };
 
   const stopRecording = () => {
