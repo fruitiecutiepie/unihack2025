@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useMemo } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -18,6 +18,11 @@ export default function UploadFiles() {
   const [loadingProgress, setLoadingProgress] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const [finalVideo, setFinalVideo] = useState<File | null>(null);
+
+  const videoUrl = useMemo(() => {
+    return finalVideo ? URL.createObjectURL(finalVideo) : null
+  }, [finalVideo])
 
   // Simulate loading progress
   useEffect(() => {
@@ -35,6 +40,48 @@ export default function UploadFiles() {
 
       return () => clearInterval(interval)
     }
+
+    //fetch("http://0.0.0.0:5300/api/test", {method: "GET"})
+
+    if (pageState === "preview") {
+    fetch("http://0.0.0.0:5300/api/download", {
+          method: "GET",
+        }).then((res) => res.blob()).then((blob) => {
+          const file = new File([blob], "final_video.mp4", { type: "video/mp4" });
+          setFinalVideo(file);
+        }).catch((err) => console.error("Error fetching video:", err));
+    }
+
+    async function getVideo() {
+      try {
+        const res = await fetch("http://0.0.0.0:5300/api/download", {
+          method: "GET",
+        });
+    
+        if (!res.ok) {
+          throw new Error(`HTTP error! Status: ${res.status}`);
+        }
+    
+        const blob = await res.blob();
+        console.log("Received blob:", blob);
+    
+        if (blob.size === 0) {
+          throw new Error("Received empty blob");
+        }
+    
+        const file = new File([blob], "final_video.mp4", { type: "video/mp4" });
+        console.log("Created file:", file);
+        setFinalVideo(file);
+      } catch (error) {
+        console.error("Error fetching video:", error);
+      }
+
+      if (videoUrl) {
+        URL.revokeObjectURL(videoUrl)
+      }
+    }
+
+    //getVideo()
   }, [pageState])
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -74,9 +121,21 @@ export default function UploadFiles() {
     */
   }
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     setPageState("loading")
     setLoadingProgress(0)
+
+    const formData = new FormData()
+    formData.append("file", files[0])
+
+    console.log("Uploading file:", files[0])
+
+    const res = await fetch("http://0.0.0.0:5300/api/upload", {
+      method: "POST",
+      body: formData
+    })
+    const result = await res.json()
+    console.log(result.message)
   }
 
   const handleBackToUpload = () => {
@@ -140,7 +199,7 @@ export default function UploadFiles() {
                 className="w-full h-full object-contain"
                 controls
                 poster="/placeholder.svg?height=720&width=1280"
-                src="https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+                src={videoUrl}
               />
             </div>
 
