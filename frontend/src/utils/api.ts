@@ -14,20 +14,40 @@ export enum Language {
 export type LanguageState = {
   available: Language[];
   loaded: Language[];
-  current: Language;
-};
+  currentSource: Language;
+  currentTarget: Language;
+}
 
-export async function fetchLanguages(): Promise<LanguageState> {
+export async function fetchLanguages(): Promise<LanguageState | null> {
   try {
-    const response = await fetch(`${BACKEND_URL}/available_languages`);
+    const response = await fetch(`${BACKEND_URL}/available_languages`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    });
     if (!response.ok) {
       throw new Error(`Failed to fetch languages: ${response.status} ${response.statusText}`);
     }
+
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      console.error('Received non-JSON response:', contentType);
+
+      // Log the actual response content for debugging
+      const text = await response.text();
+      console.error('Response content:', text.substring(0, 200) + '...');
+
+      return null;
+    }
+
+    console.log('response', response);
     return await response.json();
   } catch (error) {
     console.error('Error fetching languages:', error);
     // Return sensible defaults
-    return { available: [], loaded: [], current: Language.English };
+    return null;
   }
 }
 
