@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useMemo } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -18,22 +18,65 @@ export default function UploadFiles() {
   const [loadingProgress, setLoadingProgress] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const [finalVideo, setFinalVideo] = useState<File | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (finalVideo) {
+      console.log("finalVideo updated:", finalVideo);
+  
+      const url = URL.createObjectURL(finalVideo);
+      setVideoUrl(url);
+  
+      if (videoRef.current) {
+        videoRef.current.src = url;
+        videoRef.current.load();
+      }
+    }
+  
+    return () => {
+      if (videoUrl) {
+        URL.revokeObjectURL(videoUrl);
+      }
+    };
+  }, [finalVideo]);
 
   // Simulate loading progress
   useEffect(() => {
     if (pageState === "loading") {
       const interval = setInterval(() => {
         setLoadingProgress((prev) => {
-          if (prev >= 100) {
+          if (prev >= 200) {
             clearInterval(interval)
-            setPageState("preview")
-            return 100
+            // setPageState("preview")
+            return 200
           }
           return prev + 1
         })
       }, 50)
 
       return () => clearInterval(interval)
+    }
+
+    if (pageState === "preview") {
+      fetch('http://0.0.0.0:5033/api/test', {
+        method: "GET",
+      })
+
+      fetch('http://0.0.0.0:5033/api/download', {
+        method: "GET",
+        cache: "no-store",  // キャッシュを無効にする
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate", 
+          "Pragma": "no-cache", 
+          "Expires": "0"
+        }
+      }).then((res) => res.blob()).then((blob) => {
+        const file = new File([blob], "output.mp4", { type: "video/mp4" });
+        console.log(file)
+        setFinalVideo(file);
+      })
+      .catch((err) => console.error("Error fetching video:", err));
     }
   }, [pageState])
 
@@ -74,10 +117,45 @@ export default function UploadFiles() {
     */
   }
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
+
+    for (var i = 0; i < files.length; i++) {
+      const formData = new FormData();
+      formData.append('file', files[i])
+      if (i == 0) {
+        formData.append('file_name', "angle_CENTER.mp4")
+      } else {
+        formData.append('file_name', "angle_SPEAKER_0" + (i - 1).toString() + ".mp4")
+      }
+
+      await fetch('http://0.0.0.0:5033/api/upload', {
+        method: "POST",
+        body: formData
+      })
+    }
+
     setPageState("loading")
     setLoadingProgress(0)
+
+    await fetch('http://0.0.0.0:5033/api/edit_video', {
+      method: "POST"
+    })
+
+    setPageState("preview")
   }
+
+  const handleDownload = () => {
+    console.log("hello")
+    console.log(videoUrl)
+    if (videoUrl) {
+      const a = document.createElement("a");
+      a.href = videoUrl;
+      a.download = "final_video.mp4";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  };
 
   const handleBackToUpload = () => {
     setPageState("upload")
@@ -139,15 +217,14 @@ export default function UploadFiles() {
                 ref={videoRef}
                 className="w-full h-full object-contain"
                 controls
-                poster="/placeholder.svg?height=720&width=1280"
-                src="https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+                src={videoUrl}
               />
             </div>
 
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 mt-2">
               <Button className="flex-1 py-6 rounded-md bg-zinc-900 hover:bg-zinc-800/50 text-white font-medium shadow-lg transition-all duration-300 border border-zinc-700/50 hover:border-zinc-500">
-                <Download className="w-5 h-5 mr-2" />
+                <Download className="w-5 h-5 mr-2" onClick={handleDownload}/>
                 Download Video
               </Button>
               <Button
