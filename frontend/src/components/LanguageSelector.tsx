@@ -3,7 +3,8 @@ import React from 'react';
 
 interface LanguageSelectorProps {
   languages: LanguageState;
-  onLanguageChange: (lang: Language) => void;
+  onSourceLanguageChange: (lang: Language) => void;
+  onTargetLanguageChange: (lang: Language) => void;
 }
 
 export function getLanguageName(lang: Language): string {
@@ -31,22 +32,23 @@ export function getLanguageName(lang: Language): string {
 
 export default function LanguageSelector({
   languages,
-  onLanguageChange
+  onSourceLanguageChange,
+  onTargetLanguageChange,
 }: LanguageSelectorProps) {
   // Track languages that are currently being downloaded
   const [downloading, setDownloading] = React.useState<Language[]>([]);
 
   // Function to handle language change and track downloading state
-  const handleLanguageChange = (lang: Language) => {
+  const handleSourceLanguageChange = (lang: Language) => {
     if (!languages.loaded.includes(lang)) {
       setDownloading(prev => [...prev, lang]);
-
-      // Simulate download completion after a delay (remove this in real implementation)
-      setTimeout(() => {
-        setDownloading(prev => prev.filter(l => l !== lang));
-      }, 2500);
     }
-    onLanguageChange(lang);
+    onSourceLanguageChange(lang);
+    setDownloading(prev => prev.filter(l => l !== lang));
+  };
+
+  const handleTargetLanguageChange = (lang: Language) => {
+    onTargetLanguageChange(lang);
   };
 
   return (
@@ -54,12 +56,12 @@ export default function LanguageSelector({
       <h2 className="text-lg font-semibold mb-2">Language Selection</h2>
 
       <div className="flex items-center gap-3 mb-3">
-        <label htmlFor="langSelect" className="font-medium">Current Language: </label>
+        <label htmlFor="sourceLangSelect" className="font-medium">Source Language: </label>
         <select
-          id="langSelect"
-          value={languages.current}
-          onChange={(e) => handleLanguageChange(e.target.value as Language)}
-          className="px-3 py-2 border rounded-md bg-white"
+          id="sourceLangSelect"
+          value={languages.currentSource}
+          onChange={(e) => handleSourceLanguageChange(e.target.value as Language)}
+          className="px-3 py-2 border rounded-md"
         >
           {languages.available.length === 0 ? (
             <option value="">Loading languages...</option>
@@ -74,7 +76,33 @@ export default function LanguageSelector({
 
         <div className="ml-auto text-sm">
           <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-            {languages.current ? languages.current.toUpperCase() : 'No language selected'}
+            {languages.currentSource ? languages.currentSource.toUpperCase() : 'No language selected'}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 mb-3">
+        <label htmlFor="targetLangSelect" className="font-medium">Translate to: </label>
+        <select
+          id="targetLangSelect"
+          value={languages.currentTarget}
+          onChange={(e) => handleTargetLanguageChange(e.target.value as Language)}
+          className="px-3 py-2 border rounded-md"
+        >
+          {languages.available.length === 0 ? (
+            <option value="">Loading languages...</option>
+          ) : (
+            languages.available.map(lang => (
+              <option key={lang} value={lang}>
+                {getLanguageName(lang)}
+              </option>
+            ))
+          )}
+        </select>
+
+        <div className="ml-auto text-sm">
+          <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+            {languages.currentTarget ? languages.currentTarget.toUpperCase() : 'No language selected'}
           </span>
         </div>
       </div>
@@ -87,7 +115,7 @@ export default function LanguageSelector({
             <div
               key={lang}
               className={`text-xs px-2 py-1 rounded-full flex items-center gap-1
-                ${languages.current === lang ? 'bg-blue-500 text-white' : 'bg-gray-200'}
+                ${languages.currentSource === lang ? 'bg-blue-500 text-white' : 'bg-gray-200'}
                 ${languages.loaded.includes(lang) ? 'border-green-500 border' : ''}
               `}
             >
