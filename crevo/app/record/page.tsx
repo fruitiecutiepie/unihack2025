@@ -1,17 +1,23 @@
-"use client";
+"use client"
 
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback } from "react"
+import Link from "next/link"
+import Image from "next/image"
+import { Button } from "@/components/ui/button"
+import { ArrowLeft, Video, StopCircle, Save, Trash2 } from "lucide-react"
+//import { toast } from "@/hooks/use-toast"
 
-export default function Home() {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const [recording, setRecording] = useState(false);
+export default function RecordVideo() {
+  const [recording, setRecording] = useState(false)
+  const [videoBlob, setVideoBlob] = useState<Blob | null>(null)
+  const [permission, setPermission] = useState<boolean | null>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const [recordedVideo, setRecordedVideo] = useState<string | null>(null);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
-  const [audioEnabled, setAudioEnabled] = useState(true);
   const chunks = useRef<Blob[]>([]);
-  
+
   // Add refs to track previous mouth positions and speaking status
   const prevMouthPositions = useRef<Map<number, any[]>>(new Map());
   const speakingFaces = useRef<Map<number, boolean>>(new Map());
@@ -31,6 +37,9 @@ export default function Home() {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
   
     // Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -248,10 +257,16 @@ export default function Home() {
       });
     }
   }, []);
-  
 
-  // Set up camera and Mediapipe FaceMesh pipeline
   useEffect(() => {
+    if (!videoRef.current || !canvasRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
     async function setupCameraAndMediapipe() {
       try {
         // Get the camera stream
@@ -331,103 +346,157 @@ export default function Home() {
   };
 
   const stopRecording = () => {
-    mediaRecorderRef.current?.stop();
-    setRecording(false);
-  };
-
-  const toggleAudio = () => {
-    const stream = videoRef.current?.srcObject as MediaStream;
-    if (stream) {
-      const audioTrack = stream.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = !audioEnabled;
-        setAudioEnabled(!audioEnabled);
-      }
+    if (mediaRecorderRef.current && recording) {
+      mediaRecorderRef.current.stop()
+      setRecording(false)
     }
-  };
+  }
 
-  const downloadVideo = () => {
-    if (recordedBlob) {
-      const url = window.URL.createObjectURL(recordedBlob);
-      const a = document.createElement("a");
-      a.style.display = "none";
-      a.href = url;
-      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      a.download = `recorded-video-${timestamp}.webm`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    }
-  };
+  const saveVideo = () => {
+    if (!videoBlob) return
+
+    const url = URL.createObjectURL(videoBlob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `recorded-video-${new Date().toISOString()}.mp4`
+    a.click()
+
+    /*
+    toast({
+      title: "Video saved",
+      description: "Your recorded video has been saved to your device",
+    })
+    */
+  }
+
+  const discardVideo = () => {
+    setVideoBlob(null)
+    /*
+    toast({
+      title: "Video discarded",
+      description: "Your recorded video has been discarded",
+    })
+    */
+  }
 
   return (
-    <div className="min-h-screen p-8 flex flex-col items-center gap-8">
-      <div className="flex flex-col items-center gap-4">
-        {/* Video container with canvas overlay */}
-        <div className="relative w-[640px] h-[480px] bg-gray-900 rounded-lg overflow-hidden">
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            className="w-full h-full object-cover"
-          />
-          <canvas
-            ref={canvasRef}
-            width={640}
-            height={480}
-            className="absolute top-0 left-0"
-          />
+    <div className="min-h-screen bg-gradient-to-br from-zinc-950 to-zinc-900 flex flex-col">
+      {/* Header */}
+      <header className="w-full px-6 py-4 border-b border-zinc-800">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="flex items-center">
+            <Link href="/" className="flex items-center text-zinc-400 hover:text-white transition-colors">
+              <ArrowLeft className="w-5 h-5 mr-2" />
+              <span>Back</span>
+            </Link>
+          </div>
+          <div>
+            <Image
+              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Frame%205-TFlVNr1VXFToaXkY5Xb32pX7bJ0DYU.png"
+              alt="CREVO"
+              width={100}
+              height={30}
+              className="h-8 w-auto"
+            />
+          </div>
         </div>
+      </header>
 
-        <div className="flex gap-4">
-          {!recording ? (
-            <>
-              <button
-                onClick={startRecording}
-                className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
-              >
-                Start Recording
-              </button>
-              <button
-                onClick={toggleAudio}
-                className={`px-4 py-2 ${
-                  audioEnabled
-                    ? "bg-green-500 hover:bg-green-600"
-                    : "bg-gray-500 hover:bg-gray-600"
-                } text-white rounded-md transition-colors`}
-              >
-                {audioEnabled ? "Mic On" : "Mic Off"}
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={stopRecording}
-              className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
-            >
-              Stop Recording
-            </button>
-          )}
-        </div>
-      </div>
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-3xl mx-auto">
+          <h1 className="text-2xl font-light text-white mb-8 text-center">Record Video</h1>
 
-      {recordedVideo && (
-        <div className="flex flex-col items-center gap-4">
-          <h2 className="text-xl font-semibold">Recorded Video</h2>
-          <video
-            src={recordedVideo}
-            controls
-            className="w-[640px] rounded-lg"
-          />
-          <button
-            onClick={downloadVideo}
-            className="px-4 py-2 bg-purple-500 text-white rounded-md hover:bg-purple-600 transition-colors"
-          >
-            Download Video
-          </button>
+          {/* Video Preview */}
+          <div className="relative aspect-video bg-zinc-800 rounded-lg overflow-hidden mb-6 shadow-xl">
+            {permission === false && (
+              <div className="absolute inset-0 flex items-center justify-center bg-zinc-900">
+                <div className="text-center p-6">
+                  <Video className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
+                  <p className="text-zinc-400 mb-2">Camera access denied</p>
+                  <p className="text-zinc-500 text-sm">Please allow camera access in your browser settings</p>
+                </div>
+              </div>
+            )}
+
+            
+            {videoBlob ? (
+              <div>
+              <video className="w-full h-full" src={URL.createObjectURL(videoBlob)} controls />
+              <canvas ref={canvasRef} className="absolute w-full h-full object-cover" />
+              </div>
+            ) : (
+              <div>
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+              />
+              <canvas
+                ref={canvasRef}
+                className="absolute top-0 left-0 w-full h-full"
+              />
+            </div>
+            )}
+
+            
+            {recording && (
+              <div className="absolute top-4 left-4 flex items-center">
+                <div className="w-3 h-3 rounded-full bg-red-500 mr-2 animate-pulse"></div>
+                <span className="text-white text-sm">Recording</span>
+              </div>
+            )}
+          </div>
+
+          {/* Controls */}
+          <div className="flex flex-col space-y-4">
+            {videoBlob ? (
+              <div className="flex space-x-4">
+                <Button
+                  className="flex-1 py-6 rounded-md bg-zinc-900 hover:bg-white text-white hover:text-zinc-900 font-medium shadow-lg transition-all duration-300 border border-zinc-700/50"
+                  onClick={saveVideo}
+                >
+                  <Save className="w-5 h-5 mr-2" />
+                  Save Video
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1 py-6 rounded-md bg-transparent hover:bg-zinc-800 text-zinc-400 hover:text-white font-medium transition-all duration-300 border border-zinc-700/50"
+                  onClick={discardVideo}
+                >
+                  <Trash2 className="w-5 h-5 mr-2" />
+                  Discard
+                </Button>
+              </div>
+            ) : (
+              <Button
+                className={`w-full py-6 rounded-md font-medium shadow-lg transition-all duration-300 border ${
+                  recording
+                    ? "bg-red-900/80 hover:bg-red-800 text-white border-red-700/50"
+                    : "bg-zinc-900 hover:bg-white text-white hover:text-zinc-900 border-zinc-700/50"
+                }`}
+                onClick={recording ? stopRecording : startRecording}
+                disabled={permission === false}
+              >
+                {recording ? (
+                  <>
+                    <StopCircle className="w-5 h-5 mr-2" />
+                    Stop Recording
+                  </>
+                ) : (
+                  <>
+                    <Video className="w-5 h-5 mr-2" />
+                    Start Recording
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
         </div>
-      )}
+      </main>
     </div>
-  );
+  )
 }
+
