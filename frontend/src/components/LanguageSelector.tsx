@@ -135,7 +135,7 @@ export default function LanguageSelector({
                 <SelectLabel className="text-xs text-zinc-500">Available Languages</SelectLabel>
                 {languages.map((lang) => (
                   <SelectItem key={`speech-${lang.code}`} value={lang.code} className="py-3 pr-2"
-                    disabled={targetLanguage !== "EN" && lang.code !== "EN"} // TODO: Make text more dark
+                  // disabled={targetLanguage !== "EN" && lang.code !== "EN"} // TODO: Make text more dark
                   >
                     <div className="relative flex items-center w-full pr-8">
                       <div className="flex-grow text-white">
@@ -200,7 +200,7 @@ export default function LanguageSelector({
                 <SelectLabel className="text-xs text-zinc-500 mt-2">Available Languages</SelectLabel>
                 {languages.map((lang) => (
                   <SelectItem key={`translate-${lang.code}`} value={lang.code} className="py-3 pr-2"
-                    disabled={sourceLanguage !== "EN" && lang.code !== "EN"}
+                  // disabled={sourceLanguage !== "EN" && lang.code !== "EN"}
                   >
                     <div className="relative flex items-center w-full pr-8 text-white">
                       <div className="flex-grow">
