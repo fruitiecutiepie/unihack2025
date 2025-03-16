@@ -7,6 +7,8 @@ import json
 ffmpeg_path = join(dirname(__file__), 'ffmpeg')
 os.environ["IMAGEIO_FFMPEG_EXE"] = ffmpeg_path
 from moviepy.editor import *
+import cv2
+import mediapipe as mp
 
 AUTH_TOKEN = "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"
 
@@ -18,24 +20,40 @@ def detect_voices_with_speakers(audio_path):
     segments = []
 
     for turn, _, speaker in diarization.itertracks(yield_label=True):
-        segments.append((turn.start, turn.end, speaker))
+        segments.append([turn.start, turn.end, speaker])
 
     return segments
 
-def create_segments(video_path, segments, output_folder):
-    video = VideoFileClip(video_path)
-    speaker_clips = {}
-
-    for start, end, speaker in segments:
-        clip = video.subclip(start, end)
-        if speaker not in speaker_clips:
-            speaker_clips[speaker] = []
-        speaker_clips[speaker].append(clip)
-
-    for speaker, clips in speaker_clips.items():
-        combined_clip = concatenate_videoclips(clips)
-        output_path = f"{output_folder}/{speaker}_segment.mp4"
-        combined_clip.write_videofile(output_path, codec="libx264")
+def detect_faces_at_timestamp(video_path, timestamp):
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise ValueError("Could not open the video")
+    
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    
+    frame_number = int(fps * timestamp)
+    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+    
+    ret, frame = cap.read()
+    if not ret:
+        raise ValueError("Could not obtain the frame of video")
+    
+    mp_face_detection = mp.solutions.face_detection
+    face_detection = mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.5)
+    
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    results = face_detection.process(rgb_frame)
+    
+    faces = []
+    if results.detections:
+        h, w, _ = frame.shape
+        for detection in results.detections:
+            bboxC = detection.location_data.relative_bounding_box
+            x, y, w_box, h_box = (bboxC.xmin * w, bboxC.ymin * h, bboxC.width * w, bboxC.height * h)
+            faces.append((int(x), int(y)))
+    
+    cap.release()
+    return faces
 
 # Example Usage
 
@@ -47,6 +65,13 @@ def generate_segments():
     audio.write_audiofile(audio_path)
 
     segments = detect_voices_with_speakers(audio_path)
+    print(segments)
+
+    for segment in segments:
+        position = detect_faces_at_timestamp(video_path, segment[0])
+        position.sort(key=lambda x: x[0])
+        segment.append(position)
+
     print(segments)
     return segments
 
