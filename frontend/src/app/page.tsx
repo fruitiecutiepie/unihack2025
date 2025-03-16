@@ -1,13 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import VideoRecorder from "@/components/VideoRecorder";
-import SubtitleOverlay from "@/components/SubtitleOverlay";
-import RecordingControls from "@/components/RecordingControls";
-import SubtitleSettingsPanel from "@/components/SubtitleSettingsPanel";
-import LanguageSelector from "@/components/LanguageSelector";
 import useSocket from "@/hooks/useSocket";
-import { Language } from "@/utils/api";
 import Image from "next/image";
 import VideoImporter from "@/components/VideoImporter";
 import LaptopMockup from "@/components/LaptopMockup";
@@ -15,8 +9,6 @@ import LaptopMockup from "@/components/LaptopMockup";
 export type Subtitle = {
   originalText: string;
   translatedText: string;
-  sourceLang: Language;
-  targetLang: Language;
   isPartial: boolean;
   timestamp: number;
 };
@@ -50,9 +42,9 @@ export default function Home() {
   );
   const [recording, setRecording] = useState(false);
   const [recordedVideo, setRecordedVideo] = useState<string | null>(null);
-  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
-  const [audioEnabled, setAudioEnabled] = useState(true);
-  const [showSubtitles, setShowSubtitles] = useState(true);
+  const [videoBlob, setvideoBlob] = useState<Blob | null>(null);
+  const [micActive, setMicActive] = useState(true);
+  const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [subtitleSettings, setSubtitleSettings] = useState({
     fontSize: 24,
@@ -67,8 +59,8 @@ export default function Home() {
 
   // Recording controls (start, stop, toggle audio, download, etc.)
   const downloadVideo = () => {
-    if (recordedBlob) {
-      const url = URL.createObjectURL(recordedBlob);
+    if (videoBlob) {
+      const url = URL.createObjectURL(videoBlob);
       const a = document.createElement("a");
       a.style.display = "none";
       a.href = url;
@@ -186,7 +178,7 @@ export default function Home() {
 //     recording={recording}
 //     setRecording={setRecording}
 //     setRecordedVideo={setRecordedVideo}
-//     setRecordedBlob={setRecordedBlob}
+//     setvideoBlob={setvideoBlob}
 //     setSubtitleHistory={setSubtitleHistory}
 //     subtitle={subtitle}
 //   />
@@ -194,7 +186,7 @@ export default function Home() {
 //   {/* Subtitle overlay */}
 //   <SubtitleOverlay
 //     subtitle={subtitle}
-//     showSubtitles={showSubtitles}
+//     subtitlesEnabled={subtitlesEnabled}
 //     subtitleSettings={subtitleSettings}
 //   />
 
@@ -208,13 +200,13 @@ export default function Home() {
 //   {/* Recording and subtitle controls */}
 //   <RecordingControls
 //     recording={recording}
-//     audioEnabled={audioEnabled}
-//     setAudioEnabled={setAudioEnabled}
+//     micActive={micActive}
+//     setMicActive={setMicActive}
 //     startRecording={() => { }}
 //     stopRecording={() => { }}
 //     toggleAudio={() => { }}
-//     showSubtitles={showSubtitles}
-//     setShowSubtitles={setShowSubtitles}
+//     subtitlesEnabled={subtitlesEnabled}
+//     setSubtitlesEnabled={setSubtitlesEnabled}
 //     setShowSettings={setShowSettings}
 //   />
 

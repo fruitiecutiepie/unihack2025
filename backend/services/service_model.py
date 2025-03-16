@@ -6,7 +6,7 @@ from vosk import Model
 from config import MODEL_BASE_URL, AVAILABLE_MODELS
 
 models = {}
-current_language = "en"
+current_language = "EN"
 
 def download_and_load_model(lang_code):
   global models

@@ -3,23 +3,23 @@ from transformers import MarianMTModel, MarianTokenizer
 
 translation_models = {}
 tokenizers = {}
-target_language = "en"  # default target language
+target_language = "EN"  # default target language
 
 # Map language codes to MarianMT model names
 TRANSLATION_MODEL_NAMES = {
-    'en-es': 'Helsinki-NLP/opus-mt-en-es',
-    'en-fr': 'Helsinki-NLP/opus-mt-en-fr',
-    'en-de': 'Helsinki-NLP/opus-mt-en-de',
-    'en-ru': 'Helsinki-NLP/opus-mt-en-ru',
-    'en-zh': 'Helsinki-NLP/opus-mt-en-zh',
-    'en-ja': 'Helsinki-NLP/opus-mt-en-jap',
+    'EN-ES': 'Helsinki-NLP/opus-mt-en-es',
+    'EN-FR': 'Helsinki-NLP/opus-mt-en-fr',
+    'EN-DE': 'Helsinki-NLP/opus-mt-en-de',
+    'EN-RU': 'Helsinki-NLP/opus-mt-en-ru',
+    'EN-CN': 'Helsinki-NLP/opus-mt-en-zh',
+    'EN-JA': 'Helsinki-NLP/opus-mt-en-jap',
     
-    'es-en': 'Helsinki-NLP/opus-mt-es-en',
-    'fr-en': 'Helsinki-NLP/opus-mt-fr-en',
-    'de-en': 'Helsinki-NLP/opus-mt-de-en',
-    'ru-en': 'Helsinki-NLP/opus-mt-ru-en',
-    'zh-en': 'Helsinki-NLP/opus-mt-zh-en',
-    'ja-en': 'Helsinki-NLP/opus-mt-ja-en',
+    'ES-EN': 'Helsinki-NLP/opus-mt-es-en',
+    'FR-EN': 'Helsinki-NLP/opus-mt-fr-en',
+    'DE-EN': 'Helsinki-NLP/opus-mt-de-en',
+    'RU-EN': 'Helsinki-NLP/opus-mt-ru-en',
+    'CN-EN': 'Helsinki-NLP/opus-mt-zh-en',
+    'JA-EN': 'Helsinki-NLP/opus-mt-ja-en',
 }
 
 # Attempt GPU usage if desired
@@ -50,6 +50,16 @@ def get_translation_model(source_lang, target_lang):
     except Exception as e:
         print(f"[Translation] Error loading model for {lang_pair}: {e}")
         return None, None
+    
+def load_model(source_lang, target_lang):
+    """
+    Load the translation model for the given source and target languages.
+    """
+    model, tokenizer = get_translation_model(source_lang, target_lang)
+    if not model or not tokenizer:
+        print(f"[Translation] Cannot load model for {source_lang} to {target_lang}")
+        return False
+    return True
 
 def translate_text(text, source_lang, target_lang):
     """

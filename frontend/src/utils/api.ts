@@ -1,24 +1,7 @@
 import { BACKEND_URL } from "@/app/page";
+import { Language } from "@/components/LanguageSelector";
 
-export enum Language {
-  English = 'en',
-  Spanish = 'es',
-  French = 'fr',
-  Chinese = 'cn',
-  Russian = 'ru',
-  German = 'de',
-  Japanese = 'ja',
-  Korean = 'ko',
-}
-
-export type LanguageState = {
-  available: Language[];
-  loaded: Language[];
-  currentSource: Language;
-  currentTarget: Language;
-}
-
-export async function fetchLanguages(): Promise<LanguageState | null> {
+export async function fetchLanguages(): Promise<Language[] | null> {
   try {
     const response = await fetch(`${BACKEND_URL}/available_languages`, {
       method: 'GET',

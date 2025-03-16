@@ -1,17 +1,15 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Dispatch, SetStateAction } from "react";
 import { io } from "socket.io-client";
-import { Language, LanguageState } from "@/utils/api";
 import { BACKEND_URL, Subtitle } from "@/app/page";
+import { Language, LanguageCode } from "@/components/LanguageSelector";
+import { fetchLanguages } from "@/utils/api";
 
 export default function useSocket(
-  setSubtitle: (subtitle: Subtitle) => void
+  setSubtitles: Dispatch<SetStateAction<Subtitle | null>>
 ) {
-  const [languages, setLanguages] = useState<LanguageState>({
-    available: Object.values(Language),
-    loaded: [],
-    currentSource: Language.English,
-    currentTarget: Language.English
-  });
+  const [languages, setLanguages] = useState<Language[]>([]);
+  const [sourceLanguage, setSourceLanguage] = useState<LanguageCode>("EN")
+  const [targetLanguage, setTargetLanguage] = useState<LanguageCode>("EN")
   const [socketConnected, setSocketConnected] = useState(false);
   const socketRef = useRef<any>(null);
 
@@ -27,6 +25,10 @@ export default function useSocket(
 
     socket.on("connect", async () => {
       setSocketConnected(true);
+      const languages = await fetchLanguages();
+      if (languages) {
+        setLanguages(languages);
+      }
     });
 
     socket.on("disconnect", () => {
@@ -40,13 +42,13 @@ export default function useSocket(
     socket.on("set_language_source", (data: {
       lang: Language;
     }) => {
-      setLanguages((prev) => ({ ...prev, currentSource: data.lang }));
+      setLanguages((prev) => [...prev, data.lang]);
     });
 
     socket.on("set_language_target", (data: {
       lang: Language;
     }) => {
-      setLanguages((prev) => ({ ...prev, currentTarget: data.lang }));
+      setLanguages((prev) => [...prev, data.lang]);
     });
 
     socket.on("subtitle", (data) => {
@@ -60,11 +62,9 @@ export default function useSocket(
       const isPartial = data.is_partial;
 
       // Update subtitle state
-      setSubtitle({
+      setSubtitles({
         originalText: originalText,
         translatedText: translatedText,
-        sourceLang: sourceLang,
-        targetLang: targetLang,
         isPartial: isPartial,
         timestamp: Date.now()
       });
@@ -76,26 +76,26 @@ export default function useSocket(
     };
   }, []);
 
-  const handleSourceLanguageChange = (lang: Language) => {
-    const languageCode = Object.values(Language).includes(lang)
-      ? lang
-      : Language.English;
+  const handleSourceLanguageChange = (langCode: LanguageCode) => {
     if (socketRef.current) {
-      socketRef.current.emit("set_language_source", { lang: languageCode });
-      setLanguages((prev) => ({ ...prev, currentSource: languageCode }));
+      socketRef.current.emit("set_language_source", { langCode });
+      setSourceLanguage(langCode);
     }
   };
 
-  const handleTargetLanguageChange = (lang: Language) => {
+  const handleTargetLanguageChange = (langCode: LanguageCode) => {
     if (socketRef.current) {
-      socketRef.current.emit("set_language_target", { lang });
-      setLanguages((prev) => ({ ...prev, currentTarget: lang }));
+      socketRef.current.emit("set_language_target", { langCode });
+      setTargetLanguage(langCode);
     }
   };
 
   return {
-    languages,
     socketConnected,
+    languages,
+    setLanguages,
+    sourceLanguage,
+    targetLanguage,
     handleSourceLanguageChange,
     handleTargetLanguageChange
   };

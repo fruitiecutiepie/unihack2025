@@ -17,7 +17,6 @@ def start_ngrok_tunnel(port: int) -> str:
     )
     
     public_url = tunnel.public_url
-    print(f"Ngrok tunnel started at: {public_url}")
     print("Inspection disabled and host header rewriting enabled")
     return public_url
 
@@ -50,7 +49,10 @@ def start_backend():
 if __name__ == "__main__":
     # 1. Start the ngrok tunnel.
     frontend_public_url = start_ngrok_tunnel(3000)
+    print(f"Ngrok tunnel for frontend started at: {frontend_public_url}")
+    
     backend_public_url = start_ngrok_tunnel(5033)
+    print(f"Ngrok tunnel for backend started at: {backend_public_url}")
     
     # 2. Update the frontend global variable in the JSON file.
     update_frontend_global_variable(frontend_public_url, backend_public_url)

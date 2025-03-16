@@ -9,6 +9,7 @@ from time import sleep
 
 import services.service_model as service_model
 import services.service_translation as service_translation
+import services.service_language as service_language
 
 # Audio settings
 FORMAT = pyaudio.paInt16
@@ -192,24 +193,43 @@ def audio_service(socketio):
 
     @socketio.on('set_language_target')
     def handle_target_language(data):
-        lang = data.get('lang', '').lower()
-        if lang in service_model.AVAILABLE_MODELS:
-            # Update the global target language in service_translation
-            service_translation.target_language = lang
-            emit('set_language_target', {'lang': lang})
-        else:
+        langCode = data.get('langCode', '')
+        if langCode not in service_model.AVAILABLE_MODELS:
             emit('error', {'message': 'Target language not available'})
+            return
+    
+        success = service_translation.load_model(service_model.current_language, service_translation.target_language)
+        if not success:
+            emit('error', {'message': 'Failed to load translation model'})
+            return
+            
+        service_translation.target_language = langCode
+        emit('set_language_target', {'lang': {
+            'code': service_translation.target_language,
+            'name': service_language.get_language_name(service_translation.target_language),
+            'status': 'loaded' if service_translation.target_language in service_translation.translation_models else 'not-loaded'
+        }})
 
     @socketio.on('set_language_source')
     def handle_source_language(data):
         global rec
-        lang = data.get('lang', '').lower()
-        if lang in service_model.AVAILABLE_MODELS:
-            service_model.current_language = lang
-            rec = get_recognizer()
-            emit('set_language_source', {'lang': service_model.current_language})
-        else:
+        langCode = data.get('langCode', '')
+        if langCode not in service_model.AVAILABLE_MODELS:
             emit('error', {'message': 'Language not available'})
+            return
+    
+        success = service_model.download_and_load_model(langCode)
+        if not success:
+            emit('error', {'message': 'Failed to load model'})
+            return
+        
+        service_model.current_language = langCode
+        update_recognizer()
+        emit('set_language_source', {'lang': {
+            'code': service_model.current_language,
+            'name': service_language.get_language_name(service_model.current_language),
+            'status': 'loaded' if service_model.current_language in service_model.models else 'not-loaded'
+        }})
 
     @socketio.on('disconnect')
     def handle_disconnect():
