@@ -11,13 +11,13 @@ from PIL import Image, ImageDraw, ImageFont
 from moviepy.editor import *
 
 def crop_video(start, end, mouth_position):
-  video = VideoFileClip("./backend/center_video.mp4")
+  video = VideoFileClip("./backend/angle_CENTER.mp4")
   w, h = video.size
   crop_width = w * 2/3
   crop_height = h * 2/3
 
-  x1 = max(0, mouth_position[0] - crop_width // 2)
-  y1 = max(0, mouth_position[1] - crop_height // 2)
+  x1 = max(0, mouth_position[0] - crop_width / 2)
+  y1 = max(0, mouth_position[1] + 100 - crop_height / 2)
 
   x2 = min(w, x1 + crop_width)
   y2 = min(h, y1 + crop_height)
